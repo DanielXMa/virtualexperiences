@@ -1,0 +1,94 @@
+---
+title: "Exploratory Data Analytics"
+author: "Daniel Ma"
+date: "30/05/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=TRUE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+my_data <- read_excel("ANZ synthesised transaction dataset.xlsx")
+my_data$date <- as.Date(my_data$date, "yyyy-mm-dd") # will convert the date column into a time value
+summary(my_data)
+```
+
+The warning that exists is because of the unexpected values in the biller_code column.
+
+```{r message=FALSE, warning=FALSE}
+library(factoextra)
+fact_cols <- names(dplyr::select_if(subset(my_data,select = -c(account,long_lat,merchant_id,first_name,extraction,transaction_id,customer_id,merchant_long_lat)), is.character))
+my_data[,fact_cols] <- lapply(my_data[,fact_cols], factor)
+```
+
+## Findings
+
+```{r transcation amount, echo=TRUE, message=FALSE, warning=FALSE}
+summary(my_data$amount)
+```
+
+From this summary, we can see that the average transaction amount is $187.93.  
+
+
+```{r missing values, echo=TRUE, message=FALSE, warning=FALSE}
+my_data %>% filter(is.na(card_present_flag)) %>% filter(status=="posted") %>% count()
+```
+
+```{r posted values, echo=TRUE, message=FALSE, warning=FALSE}
+my_data %>% filter(status=="posted") %>% count()
+```
+
+The two above lines of code indicate that missing values for the sveral columns are when the status is “posted”. Data does not need to be cleansed as merchant details will be NA for posted transactions 
+
+```{r unique names, echo=TRUE, message=FALSE, warning=FALSE}
+unique(my_data$first_name)
+```
+
+```{r common names, echo=TRUE, message=FALSE, warning=FALSE}
+my_data %>% group_by(first_name)%>% summarise(unique(account)) %>% count() %>% filter(n>1)
+```
+
+There are many unique first names but we notice that Michael is the most common first name, of which has 6 different account users.
+
+```{r age groups, echo=TRUE, message=FALSE, warning=FALSE}
+# Separating into different age groups
+my_data1 <- mutate(my_data, Age_group = ifelse(age <= 30 ,'Young Adult',ifelse(age >30 & age <50, 'Middle Age','Old')))
+# Looking at total number of transactions per month excluding credit
+my_data_transaction <- my_data1 %>% filter(movement!='credit')%>% group_by(account,first_name,format(date, "%m/%Y"),Age_group,gender)%>% count()
+
+# Outlier Analysis
+boxplot(my_data_transaction$n ~ my_data_transaction$Age_group,xlab = "Age Group",ylab = "Number of Transactions", main = "Monthy Transactions by age group")
+```
+We see that young adults and middle aged people made more transactions. However, we need to take into account that these age groups also has large outliers, namely, one young adult who made over 200 transaction during the period of which this data was taken.
+
+
+```{r gender, echo=TRUE, message=FALSE, warning=FALSE}
+boxplot(my_data_transaction$n ~ my_data_transaction$gender,xlab = "Gender",ylab = "Number of Transactions", main = "Monthy Transactions by Gender")
+```
+Once again, we notice that females made more transactions during this time period compared to males, but there is once again an outlier of a female who made over 200 transactions. From both boxplots (this one and the previous), we can deduce that a young female adult made over 200 transaction over the course of this period.
+
+Regardless of age or gender, the existence of outliers have increase the mean of the number of transactions for each age group or gender.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+#The plot was created with this code (but cannot be used in a pdf format)
+#library(plotly)
+#my_data_location <- my_data %>%
+# separate(merchant_long_lat, c("merchant_long_lat_1", "merchant_long_lat_2"), sep = " ")
+#my_data_location %>%
+# plot_geo() %>%
+# add_trace(x = ~merchant_long_lat_1,
+#           y = ~merchant_long_lat_2)
+```
+
+```{r image-ref-for-in-text, echo = FALSE, message=FALSE, fig.align='center', fig.cap='Some cool caption', out.width='0.75\\linewidth'}
+knitr::include_graphics("/Users/Signature/Desktop/Careers/plot.pdf")
+```
+
+While the plot below does not focus in on Australia (only because the image was saved as a pdf, not sure how to actually do that), zooming into Australia, we find that many of the merchants operate in Queensland, New South Wales and Victoria (the eastern side of Australia). Most merchants also operate on or close to the coast, with very few operating in inland Australia.
+
